@@ -1,6 +1,7 @@
 #include "experimentacion.h"
 #include "tree.h"
-#include <iostream>
+#include <chrono>    // Para medir tiempos
+#include <cstdio>    // printf
 #include <random>
 #include <algorithm>
 #include <fstream>
@@ -16,156 +17,145 @@ ExperimentacionArbol::~ExperimentacionArbol() {
     delete arbol;
 }
 
-// Medir tiempo entre dos puntos
-double ExperimentacionArbol::medirTiempo(chrono::high_resolution_clock::time_point inicio, 
-                                       chrono::high_resolution_clock::time_point fin) {
-    auto duracion = chrono::duration_cast<chrono::nanoseconds>(fin - inicio);
-    return static_cast<double>(duracion.count());
-}
-
-// Seleccionar rutas aleatorias
-vector<string> ExperimentacionArbol::seleccionarRutasAleatorias(int cantidad) {
-    vector<string> seleccionadas;
-    if (rutasDisponibles.empty()) return seleccionadas;
-    
-    random_device rd;
-    mt19937 gen(rd());
-    uniform_int_distribution<> dis(0, rutasDisponibles.size() - 1);
-    
-    for (int i = 0; i < cantidad && i < static_cast<int>(rutasDisponibles.size()); i++) {
-        seleccionadas.push_back(rutasDisponibles[dis(gen)]);
+// Seleccionar rutas Aleatorios
+vector<string> ExperimentacionArbol::seleccionarRutasAleatorios(int cantidad) {
+    vector<string> seleccion;
+    if (rutasDisponibles.empty()) return seleccion;
+    random_device rd; mt19937 gen(rd());
+    uniform_int_distribution<> dis(0, static_cast<int>(rutasDisponibles.size()) - 1);
+    for (int i = 0; i < cantidad && i < static_cast<int>(rutasDisponibles.size()); ++i) {
+        seleccion.push_back(rutasDisponibles[dis(gen)]);
     }
-    
-    return seleccionadas;
+    return seleccion;
 }
 
-// Generar datos usando el script bash
-void ExperimentacionArbol::generarDatos(int numDirectorios, int numArchivos, const string& directorio) {
-    string comando = "./create_files.bash " + to_string(numDirectorios) + " " + 
-                     to_string(numArchivos) + " " + directorio;
-    system(comando.c_str());
+// Seleccionar directorios aleatorios para inserción
+vector<string> ExperimentacionArbol::seleccionarDirectoriosAleatorios(int cantidad) {
+    vector<string> dirs;
+    for (const auto &ruta : rutasDisponibles) {
+        if (arbol->buscar(ruta) == 2) // directorio
+            dirs.push_back(ruta);
+    }
+    if (dirs.empty()) return {""};
+    random_device rd; mt19937 gen(rd());
+    uniform_int_distribution<> dis(0, static_cast<int>(dirs.size()) - 1);
+    vector<string> seleccion;
+    for (int i = 0; i < min(cantidad, static_cast<int>(dirs.size())); ++i) {
+        seleccion.push_back(dirs[dis(gen)]);
+    }
+    return seleccion;
 }
 
-// Medir tiempo de creación
-double ExperimentacionArbol::medirTiempoCreacion(const string& directorio) {
-    auto inicio = chrono::high_resolution_clock::now();
-    
-    arbol->cargarDesdeDirectorio(directorio);
+// Generar datos con script externo
+auto ExperimentacionArbol::generarDatos(int numDirs, int numFiles, const string& dir) -> void {
+     string cmd = "bash create_files.bash "
+                + to_string(numDirs) + " "
+                + to_string(numFiles) + " "
+                + dir;
+     system(cmd.c_str());
+ }
+// Medir tiempo de creación (segundos)
+auto ExperimentacionArbol::medirTiempoCreacion(const string& dir) -> double {
+    printf("Cargando datos desde '%s'...\n", dir.c_str());
+    auto start = chrono::high_resolution_clock::now();
+    arbol->cargarDesdeDirectorio(dir);
     rutasDisponibles = arbol->obtenerTodasLasRutas();
-    
-    auto fin = chrono::high_resolution_clock::now();
-    
-    return medirTiempo(inicio, fin);
+    auto end = chrono::high_resolution_clock::now();
+    auto secs = chrono::duration_cast<chrono::seconds>(end - start);
+    return static_cast<double>(secs.count());
 }
 
-// Medir tiempo de búsqueda
-double ExperimentacionArbol::medirTiempoBusqueda(int repeticiones) {
+// Medir tiempo de búsqueda (ns promedio)
+auto ExperimentacionArbol::medirTiempoBusqueda(int rep) -> double {
     if (rutasDisponibles.empty()) return 0.0;
-    
-    vector<string> rutasPrueba = seleccionarRutasAleatorias(repeticiones);
-    
-    auto inicio = chrono::high_resolution_clock::now();
-    
-    for (const string& ruta : rutasPrueba) {
-        arbol->buscar(ruta);
+    printf("Buscando %d rutas...\n", rep);
+    auto pruebas = seleccionarRutasAleatorios(rep);
+    auto start = chrono::high_resolution_clock::now();
+    for (const auto &r : pruebas) {
+        arbol->buscar(r);
     }
-    
-    auto fin = chrono::high_resolution_clock::now();
-    
-    return medirTiempo(inicio, fin) / repeticiones;
+    auto end = chrono::high_resolution_clock::now();
+    auto ns = chrono::duration_cast<chrono::nanoseconds>(end - start);
+    return static_cast<double>(ns.count()) / rep;
 }
 
-// Medir tiempo de eliminación
-double ExperimentacionArbol::medirTiempoEliminacion(int repeticiones) {
+// Medir tiempo de eliminación (ns promedio)
+auto ExperimentacionArbol::medirTiempoEliminacion(int rep) -> double {
     if (rutasDisponibles.empty()) return 0.0;
-    
-    vector<string> rutasPrueba = seleccionarRutasAleatorias(repeticiones);
-    
-    auto inicio = chrono::high_resolution_clock::now();
-    
-    for (const string& ruta : rutasPrueba) {
-        arbol->eliminar(ruta);
+    printf("Eliminando %d rutas...\n", rep);
+    auto pruebas = seleccionarRutasAleatorios(rep);
+    auto start = chrono::high_resolution_clock::now();
+    for (const auto &r : pruebas) {
+        arbol->eliminar(r);
     }
-    
-    auto fin = chrono::high_resolution_clock::now();
-    
-    return medirTiempo(inicio, fin) / repeticiones;
+    auto end = chrono::high_resolution_clock::now();
+    auto ns = chrono::duration_cast<chrono::nanoseconds>(end - start);
+    return static_cast<double>(ns.count()) / rep;
 }
 
-// Medir tiempo de inserción
-double ExperimentacionArbol::medirTiempoInsercion(int repeticiones) {
-    random_device rd;
-    mt19937 gen(rd());
-    uniform_int_distribution<> dis(1, 1000000);
-    
-    auto inicio = chrono::high_resolution_clock::now();
-    
-    for (int i = 0; i < repeticiones; i++) {
-        string rutaNueva = "nuevo_archivo_" + to_string(dis(gen)) + ".txt";
-        arbol->insertar(rutaNueva, false);
+// Medir tiempo de inserción (ns promedio)
+auto ExperimentacionArbol::medirTiempoInsercion(int rep) -> double {
+    printf("Insertando %d archivos...\n", rep);
+    auto dirsIns = seleccionarDirectoriosAleatorios(DIRECTORIOS_INSERCION);
+    random_device rd; mt19937 gen(rd());
+    uniform_int_distribution<> disFile(1, 1000000);
+    uniform_int_distribution<> disDir(0, static_cast<int>(dirsIns.size()) - 1);
+    auto start = chrono::high_resolution_clock::now();
+    for (int i = 0; i < rep; ++i) {
+        auto base = dirsIns[disDir(gen)];
+        string name = "nuevo_archivo_" + to_string(disFile(gen)) + ".txt";
+        string ruta = base.empty() ? name : base + "/" + name;
+        arbol->insertar(ruta, false);
     }
-    
-    auto fin = chrono::high_resolution_clock::now();
-    
-    return medirTiempo(inicio, fin) / repeticiones;
+    auto end = chrono::high_resolution_clock::now();
+    auto ns = chrono::duration_cast<chrono::nanoseconds>(end - start);
+    return static_cast<double>(ns.count()) / rep;
 }
 
 // Ejecutar experimento completo
-ResultadoExperimento ExperimentacionArbol::ejecutarExperimento(int numDirectorios, int numArchivos, const string& directorio) {
-    ResultadoExperimento resultado;
-    resultado.tamaño = numDirectorios + numArchivos;
-    
-    cout << "Generando datos: " << numDirectorios << " directorios, " << numArchivos << " archivos..." << endl;
-    generarDatos(numDirectorios, numArchivos, directorio);
-    
-    cout << "Midiendo tiempo de creación..." << endl;
-    resultado.tiempoCreacion = medirTiempoCreacion(directorio);
-    
-    cout << "Midiendo tiempo de búsqueda..." << endl;
-    resultado.tiempoPromedioBusqueda = medirTiempoBusqueda(REP);
-    
-    cout << "Midiendo tiempo de eliminación..." << endl;
-    resultado.tiempoPromedioEliminacion = medirTiempoEliminacion(REP);
-    
-    cout << "Midiendo tiempo de inserción..." << endl;
-    resultado.tiempoPromedioInsercion = medirTiempoInsercion(REP);
-    
-    return resultado;
+auto ExperimentacionArbol::ejecutarExperimento(int numDirs, int numFiles, const string& dir) -> ResultadoExperimento {
+    ResultadoExperimento res;
+    res.tamaño = numDirs + numFiles;
+    printf("=== Generando datos: %d dirs, %d files ===\n", numDirs, numFiles);
+    generarDatos(numDirs, numFiles, dir);
+    printf("=== Midiendo creacion ===\n");
+    res.tiempoCreacion = medirTiempoCreacion(dir);
+    printf("  Creacion: %.4f s\n", res.tiempoCreacion);
+    printf("=== Midiendo busqueda ===\n");
+    res.tiempoPromedioBusqueda = medirTiempoBusqueda(REP);
+    printf("  Busqueda: %.4f ns\n", res.tiempoPromedioBusqueda);
+    printf("=== Midiendo eliminacion ===\n");
+    res.tiempoPromedioEliminacion = medirTiempoEliminacion(REP);
+    printf("  Eliminacion: %.4f ns\n", res.tiempoPromedioEliminacion);
+    printf("=== Midiendo insercion ===\n");
+    res.tiempoPromedioInsercion = medirTiempoInsercion(REP);
+    printf("  Insercion: %.4f ns\n", res.tiempoPromedioInsercion);
+    return res;
 }
 
-// Generar reporte
-void ExperimentacionArbol::generarReporte(const vector<ResultadoExperimento>& resultados) {
-    ofstream archivo("resultados_experimentos.csv");
-    
-    archivo << "Tamaño,TiempoCreacion(ns),TiempoBusqueda(ns),TiempoEliminacion(ns),TiempoInsercion(ns)" << endl;
-    
-    for (const auto& resultado : resultados) {
-        archivo << resultado.tamaño << ","
-                << resultado.tiempoCreacion << ","
-                << resultado.tiempoPromedioBusqueda << ","
-                << resultado.tiempoPromedioEliminacion << ","
-                << resultado.tiempoPromedioInsercion << endl;
+// Generar reporte CSV
+auto ExperimentacionArbol::generarReporte(const vector<ResultadoExperimento>& resultados) -> void {
+    ofstream out("resultados_experimentos.csv");
+    out << "Tamaño,TiempoCreacion(s),TiempoBusqueda(ns),TiempoEliminacion(ns),TiempoInsercion(ns)\n";
+    for (const auto &r : resultados) {
+        out << r.tamaño << ","
+            << r.tiempoCreacion << ","
+            << r.tiempoPromedioBusqueda << ","
+            << r.tiempoPromedioEliminacion << ","
+            << r.tiempoPromedioInsercion << "\n";
     }
-    
-    archivo.close();
-    cout << "Reporte generado en resultados_experimentos.csv" << endl;
+    out.close();
+    printf("Reporte generado: resultados_experimentos.csv\n");
 }
 
 // Ejecutar todos los experimentos
-void ExperimentacionArbol::ejecutarTodosLosExperimentos() {
+auto ExperimentacionArbol::ejecutarTodosLosExperimentos() -> void {
     vector<ResultadoExperimento> resultados;
-    
-    // Configuración pequeña
-    cout << "=== EXPERIMENTO PEQUEÑO ===" << endl;
-    resultados.push_back(ejecutarExperimento(20000, 200000, "datos_pequeños"));
-    
-    // Configuración mediana
-    cout << "=== EXPERIMENTO MEDIANO ===" << endl;
+    printf("=== EXPERIMENTO PEQUENO ===\n");
+    resultados.push_back(ejecutarExperimento(20000, 200000, "datos_pequenos"));
+    printf("\n=== EXPERIMENTO MEDIANO ===\n");
     resultados.push_back(ejecutarExperimento(100000, 1000000, "datos_medianos"));
-    
-    // Configuración grande
-    cout << "=== EXPERIMENTO GRANDE ===" << endl;
+    printf("\n=== EXPERIMENTO GRANDE ===\n");
     resultados.push_back(ejecutarExperimento(1000000, 10000000, "datos_grandes"));
-    
     generarReporte(resultados);
 }
