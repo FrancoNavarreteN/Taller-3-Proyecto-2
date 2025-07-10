@@ -28,11 +28,10 @@ private:
     vector<string> rutasDisponibles;
     
     // Funciones auxiliares
-    double medirTiempo(chrono::high_resolution_clock::time_point inicio, 
-                       chrono::high_resolution_clock::time_point fin);
-    vector<string> seleccionarRutasAleatorias(int cantidad);
+    vector<string> seleccionarRutasAleatorios(int cantidad);
+    vector<string> seleccionarDirectoriosAleatorios(int cantidad);
     void generarDatos(int numDirectorios, int numArchivos, const string& directorio);
-    
+
 public:
     // Constructor
     ExperimentacionArbol();
@@ -54,4 +53,4 @@ public:
     void ejecutarTodosLosExperimentos();
 };
 
-#endif
+#endif // EXPERIMENTACION_H
