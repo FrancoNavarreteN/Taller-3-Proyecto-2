@@ -3,7 +3,7 @@
 
 #include <vector>
 #include <string>
-
+#include "tree.h"    
 using namespace std;
 
 // Constantes para la experimentación
