@@ -4,6 +4,7 @@
 #include <sstream>     
 #include <exception> 
 #include <algorithm>
+#include <iostream> 
 
 // Destructor del nodo
 NodoArbol::~NodoArbol() {
