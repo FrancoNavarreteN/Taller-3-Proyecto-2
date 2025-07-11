@@ -80,34 +80,68 @@ auto ExperimentacionArbol::medirTiempoBusqueda(int rep) -> double {
 }
 
 // Medir tiempo de eliminación (ns promedio)
-auto ExperimentacionArbol::medirTiempoEliminacion(int rep) -> double {
+double ExperimentacionArbol::medirTiempoEliminacion(int rep) {
     if (rutasDisponibles.empty()) return 0.0;
+    
     printf("Eliminando %d rutas...\n", rep);
     auto pruebas = seleccionarRutasAleatorios(rep);
+    
+    // Guardar información de los archivos que vamos a eliminar para recrearlos
+    vector<pair<string, bool>> archivosEliminados; // ruta, esDirectorio
+    
+    for (const auto& r : pruebas) {
+        int tipo = arbol->buscar(r);
+        if (tipo != 1) { // Si existe (archivo o directorio)
+            archivosEliminados.push_back({r, tipo == 2}); // tipo 2 = directorio
+        }
+    }
+    
+    // Medir tiempo de eliminación
     auto start = chrono::high_resolution_clock::now();
-    for (const auto &r : pruebas) {
+    for (const auto& r : pruebas) {
         arbol->eliminar(r);
     }
     auto end = chrono::high_resolution_clock::now();
+    
+    // Recrear los archivos eliminados para mantener el conjunto de datos
+    for (const auto& archivo : archivosEliminados) {
+        arbol->insertar(archivo.first, archivo.second);
+    }
+    
     auto ns = chrono::duration_cast<chrono::nanoseconds>(end - start);
     return static_cast<double>(ns.count()) / rep;
 }
 
-// Medir tiempo de inserción (ns promedio)
-auto ExperimentacionArbol::medirTiempoInsercion(int rep) -> double {
+// Medir tiempo de inserción 
+double ExperimentacionArbol::medirTiempoInsercion(int rep) {
     printf("Insertando %d archivos...\n", rep);
     auto dirsIns = seleccionarDirectoriosAleatorios(DIRECTORIOS_INSERCION);
-    random_device rd; mt19937 gen(rd());
+    
+    random_device rd; 
+    mt19937 gen(rd());
     uniform_int_distribution<> disFile(1, 1000000);
     uniform_int_distribution<> disDir(0, static_cast<int>(dirsIns.size()) - 1);
+    
+    vector<string> archivosInsertados; // Para limpiar después
+    
     auto start = chrono::high_resolution_clock::now();
     for (int i = 0; i < rep; ++i) {
         auto base = dirsIns[disDir(gen)];
         string name = "nuevo_archivo_" + to_string(disFile(gen)) + ".txt";
         string ruta = base.empty() ? name : base + "/" + name;
-        arbol->insertar(ruta, false);
+        
+        int resultado = arbol->insertar(ruta, false);
+        if (resultado == 0) { // Si se insertó exitosamente
+            archivosInsertados.push_back(ruta);
+        }
     }
     auto end = chrono::high_resolution_clock::now();
+    
+    // Limpiar archivos insertados para no afectar otros experimentos
+    for (const auto& archivo : archivosInsertados) {
+        arbol->eliminar(archivo);
+    }
+    
     auto ns = chrono::duration_cast<chrono::nanoseconds>(end - start);
     return static_cast<double>(ns.count()) / rep;
 }
