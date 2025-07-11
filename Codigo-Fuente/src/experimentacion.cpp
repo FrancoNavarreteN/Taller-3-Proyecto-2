@@ -1,12 +1,9 @@
 #include "experimentacion.h"
-#include "tree.h"
-#include <chrono>    // Para medir tiempos
-#include <cstdio>    // printf
-#include <random>
-#include <algorithm>
-#include <fstream>
-#include <cstdlib>
-
+#include <chrono>    
+#include <fstream>   
+#include <iostream>  
+#include <cstdio>    
+#include <random>    
 // Constructor
 ExperimentacionArbol::ExperimentacionArbol() {
     arbol = new ArbolSistemaArchivos();
