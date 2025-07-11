@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <sstream>
 #include <iostream>
+#include <fstream>
 
 // Destructor del nodo
 NodoArbol::~NodoArbol() {
@@ -37,7 +38,7 @@ vector<string> ArbolSistemaArchivos::dividirRuta(const string& ruta) {
 
 // Búsqueda binaria en el vector de hijos
 int ArbolSistemaArchivos::busquedaBinaria(const vector<NodoArbol*>& hijos, const string& nombre) {
-    int izq = 0, der = hijos.size() - 1;
+    int izq = 0, der = static_cast<int>(hijos.size()) - 1;
     
     while (izq <= der) {
         int medio = izq + (der - izq) / 2;
@@ -101,30 +102,78 @@ void ArbolSistemaArchivos::cargarDirectorioRecursivo(const filesystem::path& rut
     }
 }
 
-// Cargar desde directorio
+// Cargar desde directorio - ahora también guarda el directorio base
 void ArbolSistemaArchivos::cargarDesdeDirectorio(const string& rutaDirectorio) {
     filesystem::path ruta(rutaDirectorio);
     if (filesystem::exists(ruta) && filesystem::is_directory(ruta)) {
+        directorioBase = filesystem::absolute(ruta).string();
         cargarDirectorioRecursivo(ruta, raiz);
     }
 }
 
-// Búsqueda
-int ArbolSistemaArchivos::buscar(const string& ruta) {
-    NodoArbol* nodo = buscarNodo(ruta);
-    
-    if (nodo == nullptr) {
-        return 1; // No existe
+// Construir ruta completa del sistema de archivos
+string ArbolSistemaArchivos::construirRutaCompleta(const string& rutaRelativa) {
+    if (directorioBase.empty()) {
+        return rutaRelativa;
     }
     
-    if (nodo->esArchivo()) {
-        return 0; // Es archivo
-    } else {
-        return 2; // Es directorio
+    if (rutaRelativa.empty() || rutaRelativa == "/") {
+        return directorioBase;
+    }
+    
+    return directorioBase + "/" + rutaRelativa;
+}
+
+// Crear archivo en el sistema de archivos
+bool ArbolSistemaArchivos::crearArchivoSistema(const string& rutaCompleta) {
+    try {
+        // Crear directorios padre si no existen
+        filesystem::path ruta(rutaCompleta);
+        filesystem::create_directories(ruta.parent_path());
+        
+        // Crear archivo vacío
+        ofstream archivo(rutaCompleta);
+        if (archivo.is_open()) {
+            archivo.close();
+            return true;
+        }
+        return false;
+    } catch (const filesystem::filesystem_error& e) {
+        cerr << "Error al crear archivo: " << e.what() << endl;
+        return false;
     }
 }
 
-// Inserción
+// Crear directorio en el sistema de archivos
+bool ArbolSistemaArchivos::crearDirectorioSistema(const string& rutaCompleta) {
+    try {
+        return filesystem::create_directories(rutaCompleta);
+    } catch (const filesystem::filesystem_error& e) {
+        cerr << "Error al crear directorio: " << e.what() << endl;
+        return false;
+    }
+}
+
+// Eliminar del sistema de archivos
+bool ArbolSistemaArchivos::eliminarDelSistema(const string& rutaCompleta) {
+    try {
+        if (filesystem::exists(rutaCompleta)) {
+            if (filesystem::is_directory(rutaCompleta)) {
+                // Eliminar directorio y todo su contenido
+                return filesystem::remove_all(rutaCompleta) > 0;
+            } else {
+                // Eliminar archivo
+                return filesystem::remove(rutaCompleta);
+            }
+        }
+        return false;
+    } catch (const filesystem::filesystem_error& e) {
+        cerr << "Error al eliminar: " << e.what() << endl;
+        return false;
+    }
+}
+
+// Inserción 
 int ArbolSistemaArchivos::insertar(const string& ruta, bool esDirectorio) {
     vector<string> componentes = dividirRuta(ruta);
     if (componentes.empty()) {
@@ -150,25 +199,32 @@ int ArbolSistemaArchivos::insertar(const string& ruta, bool esDirectorio) {
         return 1; // El archivo ya existe
     }
     
-    // Insertar nuevo nodo
+    // Crear en el sistema de archivos primero
+    string rutaCompleta = construirRutaCompleta(ruta);
+    bool exitoSistema = false;
+    
+    if (esDirectorio) {
+        exitoSistema = crearDirectorioSistema(rutaCompleta);
+    } else {
+        exitoSistema = crearArchivoSistema(rutaCompleta);
+    }
+    
+    if (!exitoSistema) {
+        return 3; // Error del sistema de archivos
+    }
+    
+    // Si el sistema de archivos tuvo éxito, insertar en el árbol
     NodoArbol* nuevoNodo = new NodoArbol(nombreArchivo);
     insertarOrdenado(nodoPadre->hijos, nuevoNodo);
     
     return 0; // Éxito
 }
 
-// Eliminar subárbol
-void ArbolSistemaArchivos::eliminarSubarbol(NodoArbol* nodo) {
-    if (nodo != nullptr) {
-        delete nodo;
-    }
-}
-
-// Eliminación
-bool ArbolSistemaArchivos::eliminar(const string& ruta) {
+// Eliminación 
+int ArbolSistemaArchivos::eliminar(const string& ruta) {
     vector<string> componentes = dividirRuta(ruta);
     if (componentes.empty()) {
-        return false;
+        return 1; // Ruta inválida
     }
     
     // Buscar directorio padre
@@ -180,24 +236,29 @@ bool ArbolSistemaArchivos::eliminar(const string& ruta) {
     
     NodoArbol* nodoPadre = buscarNodo(rutaPadre);
     if (nodoPadre == nullptr) {
-        return false;
+        return 1; // No existe el padre
     }
     
     // Buscar nodo a eliminar
     string nombreArchivo = componentes.back();
     int indice = busquedaBinaria(nodoPadre->hijos, nombreArchivo);
     if (indice == -1) {
-        return false;
+        return 1; // No existe el archivo/directorio
     }
     
-    // Eliminar nodo
+    // Eliminar del sistema de archivos primero
+    string rutaCompleta = construirRutaCompleta(ruta);
+    if (!eliminarDelSistema(rutaCompleta)) {
+        return 2; // Error del sistema de archivos
+    }
+    
+    // Si el sistema de archivos tuvo éxito, eliminar del árbol
     NodoArbol* nodoAEliminar = nodoPadre->hijos[indice];
     nodoPadre->hijos.erase(nodoPadre->hijos.begin() + indice);
     eliminarSubarbol(nodoAEliminar);
     
-    return true;
+    return 0; // Éxito
 }
-
 // Obtener todas las rutas
 vector<string> ArbolSistemaArchivos::obtenerTodasLasRutas() {
     vector<string> rutas;
@@ -234,4 +295,17 @@ int ArbolSistemaArchivos::contarNodosRecursivo(NodoArbol* nodo) {
     }
     
     return contador;
+}
+
+// Busca un nodo por ruta y devuelve:
+//   1 si no existe, 0 si es archivo, 2 si es directorio
+int ArbolSistemaArchivos::buscar(const string& ruta) {
+    NodoArbol* nodo = buscarNodo(ruta);
+    if (nodo == nullptr) return 1;        // No existe
+    return nodo->esArchivo() ? 0 : 2;     // 0=archivo, 2=directorio
+}
+
+// Elimina recursivamente un subárbol liberando memoria
+void ArbolSistemaArchivos::eliminarSubarbol(NodoArbol* nodo) {
+    if (nodo) delete nodo;
 }
