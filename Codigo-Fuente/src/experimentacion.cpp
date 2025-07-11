@@ -1,4 +1,5 @@
 #include "experimentacion.h"
+#include "tree.h" 
 #include <chrono>    
 #include <fstream>   
 #include <iostream>  
