@@ -1,5 +1,6 @@
+#include "tree.h"
 #include "experimentacion.h"
-#include <iostream>
+#include <iostream> 
 
 using namespace std;
 
