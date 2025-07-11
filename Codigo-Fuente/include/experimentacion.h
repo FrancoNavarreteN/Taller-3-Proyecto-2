@@ -1,8 +1,6 @@
 #ifndef EXPERIMENTACION_H
 #define EXPERIMENTACION_H
 
-#include "tree.h"
-#include <chrono>
 #include <vector>
 #include <string>
 
