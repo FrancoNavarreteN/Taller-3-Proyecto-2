@@ -1,8 +1,9 @@
 #include "tree.h"
-#include <algorithm>
-#include <sstream>
-#include <iostream>
-#include <fstream>
+#include <filesystem>  
+#include <fstream>     
+#include <sstream>     
+#include <exception> 
+
 
 // Destructor del nodo
 NodoArbol::~NodoArbol() {
